@@ -5,6 +5,7 @@ from matrix_rotation import rotate_array as ra
 
 class Tetris:
     def __init__(self, parent):
+        parent.title('T3tris')
         self.parent = parent
         self.board_width = 10
         self.board_height = 24
@@ -51,7 +52,6 @@ class Tetris:
     def tick(self):
         if not self.piece_is_active:
             self.spawn()
-            self.piece_is_active = not self.piece_is_active
         
         #self.parent.after(self.tickrate, self.tick)
     
@@ -80,43 +80,37 @@ class Tetris:
                 return
             rt = r
             ct = c+1
-        # checks for collision with existing pieces.
-        # problem: doesn't realize that it can occupy
-        # its own previous locations
+        # checks for collision with existing pieces
         for row, squares in zip(range(rt, rt+l),
                                 self.active_piece['shape']
                                 ):
             for column, square in zip(range(ct, ct+w), squares):
-                if square and self.board[row][column]:
+                if square and self.board[row][column] == 'x':
                     print(row, column, square, self.board[row][column])
-                    self.settle()
+                    if direction == 'Down':
+                        self.settle()
                     return
+        # remove shape from board
+        for row in self.board:
+            row[:] = ['' if cell=='*' else cell for cell in row]
         if direction == 'Down':
-            # problem: only blank vacated spots, not whole row
-            self.board[r][c:c+w] = [''] * w # blank piece's old top row
             self.active_piece['row'] += 1 # increment piece's row
             r += 1 # increment piece's row
-        else:
-            if direction == 'Left':
-                column = c+w
-                self.active_piece['column'] -= 1 # decrement piece's column
-                c -= 1 # decrement piece's column
-            elif direction == 'Right':
-                column = c-1
-                self.active_piece['column'] += 1 # increment piece's column
-                c += 1 # increment piece's column
-            if 0 <= column < self.board_width:
-                # problem: only blank vacated spots, not whole column
-                for idx in range(r, r+l): # blank piece's old outer column
-                    self.board[idx][column] = ''
+        elif direction == 'Left':
+            self.active_piece['column'] -= 1 # decrement piece's column
+            c -= 1 # decrement piece's column
+        elif direction == 'Right':
+            self.active_piece['column'] += 1 # increment piece's column
+            c += 1 # increment piece's column
+        # put shape onto board
         for row, squares in zip(range(r, r+l),
                                 self.active_piece['shape']
                                 ):
             for column, square in zip(range(c, c+w), squares):
                 if square:
                     self.board[row][column] = square
+        # move piece on canvas
         for id,coords_idx in zip(self.active_piece['piece'], range(len(self.active_piece['coords']))):
-            # move visual representation of piece on canvas
             x1,y1,x2,y2 = self.active_piece['coords'][coords_idx]
             if direction == 'Down':
                 y1 += self.square_width
@@ -136,12 +130,15 @@ class Tetris:
     def settle(self):
         pass # this will check for loss by checking the height of the board content
         # size is 10x20, extra space giving 10x24
-        self.piece_is_active = not self.piece_is_active
+        self.piece_is_active = False
         print('clonk')
         for row in self.board:
+            row[:] = ['x' if cell=='*' else cell for cell in row]
             print(row)
+        self.parent.after(self.tickrate, self.spawn())
         
     def spawn(self):
+        self.piece_is_active = True
         shape = self.shapes[random.choice('szrLoIT')]
         shape = ra(shape, random.choice((0, 90, 180, 270)))
         width = len(shape[0])
