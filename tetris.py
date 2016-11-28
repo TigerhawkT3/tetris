@@ -44,7 +44,9 @@ class Tetris:
                        'T':[['*', '*', '*'],
                             ['', '*', '']]
                       }
-        self.parent.bind('<Down>', self.down)
+        self.parent.bind('<Down>', self.shift)
+        self.parent.bind('<Left>', self.shift)
+        self.parent.bind('<Right>', self.shift)
         
     def tick(self):
         if not self.piece_is_active:
@@ -53,32 +55,80 @@ class Tetris:
         
         #self.parent.after(self.tickrate, self.tick)
     
-    def down(self, event=None):
+    def shift(self, event=None):
         if not self.piece_is_active:
             return
         r = self.active_piece['row']
         c = self.active_piece['column']
         l = len(self.active_piece['shape'])
         w = len(self.active_piece['shape'][0])
+        direction = (event and event.keysym) or 'Down'
         # use event.keysym to check event/direction
-        if r+l >= self.board_height:
-            self.settle()
-            return
-        self.board[r][c:c+w] = [''] * w
-        self.active_piece['row'] += 1
-        r += 1
-        for squares, row in zip(self.active_piece['shape'],
-                                range(r, r+l)):
-            self.board[row][c:c+w] = squares
+        if direction == 'Down':
+            if r+l >= self.board_height:
+                self.settle()
+                return
+            rt = r+1 # row, temporary
+            ct = c # column, temporary
+        elif direction == 'Left':
+            if not c:
+                return
+            rt = r
+            ct = c-1
+        elif direction == 'Right':
+            if c+w >= self.board_width:
+                return
+            rt = r
+            ct = c+1
+        # checks for collision with existing pieces.
+        # problem: doesn't realize that it can occupy
+        # its own previous locations
+        for row, squares in zip(range(rt, rt+l),
+                                self.active_piece['shape']
+                                ):
+            for column, square in zip(range(ct, ct+w), squares):
+                if square and self.board[row][column]:
+                    print(row, column, square, self.board[row][column])
+                    self.settle()
+                    return
+        if direction == 'Down':
+            # problem: only blank vacated spots, not whole row
+            self.board[r][c:c+w] = [''] * w # blank piece's old top row
+            self.active_piece['row'] += 1 # increment piece's row
+            r += 1 # increment piece's row
+        else:
+            if direction == 'Left':
+                column = c+w
+                self.active_piece['column'] -= 1 # decrement piece's column
+                c -= 1 # decrement piece's column
+            elif direction == 'Right':
+                column = c-1
+                self.active_piece['column'] += 1 # increment piece's column
+                c += 1 # increment piece's column
+            if 0 <= column < self.board_width:
+                # problem: only blank vacated spots, not whole column
+                for idx in range(r, r+l): # blank piece's old outer column
+                    self.board[idx][column] = ''
+        for row, squares in zip(range(r, r+l),
+                                self.active_piece['shape']
+                                ):
+            for column, square in zip(range(c, c+w), squares):
+                if square:
+                    self.board[row][column] = square
         for id,coords_idx in zip(self.active_piece['piece'], range(len(self.active_piece['coords']))):
+            # move visual representation of piece on canvas
             x1,y1,x2,y2 = self.active_piece['coords'][coords_idx]
-            y1 += self.square_width
-            y2 += self.square_width
+            if direction == 'Down':
+                y1 += self.square_width
+                y2 += self.square_width
+            elif direction == 'Left':
+                x1 -= self.square_width
+                x2 -= self.square_width
+            elif direction == 'Right':
+                x1 += self.square_width
+                x2 += self.square_width
             self.active_piece['coords'][coords_idx] = x1,y1,x2,y2
             self.canvas.coords(id, self.active_piece['coords'][coords_idx])
-    
-    def shift(self, direction):
-        pass
     
     def rotate(self, direction):
         pass
@@ -88,6 +138,8 @@ class Tetris:
         # size is 10x20, extra space giving 10x24
         self.piece_is_active = not self.piece_is_active
         print('clonk')
+        for row in self.board:
+            print(row)
         
     def spawn(self):
         shape = self.shapes[random.choice('szrLoIT')]
