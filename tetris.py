@@ -3,6 +3,14 @@ import random
 import pygame as pg
 from matrix_rotation import rotate_array as ra
 
+class Shape:
+    def __init__(self, shape, piece, row, column, coords):
+        self.shape = shape
+        self.piece = piece
+        self.row = row
+        self.column = column
+        self.coords = coords
+        
 class Tetris:
     def __init__(self, parent):
         parent.title('T3tris')
@@ -62,43 +70,14 @@ class Tetris:
         self.parent.bind('<Up>', self.rotate)
         self.parent.bind('w', self.rotate)
         self.parent.bind('W', self.rotate)
-        
-    def rotate(self, event=None):
-        if not self.active_piece:
-            return
-        r = self.active_piece['row']
-        c = self.active_piece['column']
-        l = len(self.active_piece['shape'])
-        w = len(self.active_piece['shape'][0])
-        x = c + w//2 # center column for old shape
-        y = r + l//2 # center row for old shape
-        direction = event.keysym
-        if direction in {'q', 'Q'}:
-            direction = 'left'
-            shape = ra(self.active_piece['shape'], -90)
-        elif direction in {'e', 'E', '0', 'Up', 'w', 'W'}:
-            direction = 'right'
-            shape = ra(self.active_piece['shape'], 90)
-
-        l = len(shape) # length of new shape
-        w = len(shape[0]) # width of new shape
-        rt = y - l//2 # row of new shape
-        ct = x - w//2 # column of new shape
-        x_correction,y_correction = self.active_piece[
-                                    'rotation'][self.active_piece[
-                                    'rotation_index']]
-        rt += y_correction
-        ct += x_correction
-        
-        # rotation prefers upper left corner -
-        # possibly hard-code a specific "center" square
-        # for each piece/shape
-        
-        # check whether we may rotate a piece
-        for row, squares in zip(range(rt, rt+l),
-                                shape
-                                ):
-            for column, square in zip(range(ct, ct+w), squares):
+    
+    def print_board(self):
+        for row in self.board:
+            print(*(cell or ' ' for cell in row), sep='')
+            
+    def check_and_move(self, shape, r, c, l, w):
+        for row, squares in zip(range(r, r+l), shape):
+            for column, square in zip(range(c, c+w), squares):
                 if (row not in range(self.board_height)
                     or
                     column not in range(self.board_width)
@@ -108,11 +87,13 @@ class Tetris:
                     #print(row, column, square, self.board[row][column])
                     return
         square_idxs = iter(range(4)) # iterator of 4 indices
-        # put shape onto board - function?
-        for row, squares in zip(range(rt, rt+l),
-                                shape
-                                ):
-            for column, square in zip(range(ct, ct+w), squares):
+        
+        # remove shape from board
+        for row in self.board:
+            row[:] = ['' if cell=='*' else cell for cell in row]
+        # put shape onto board and piece onto canvas
+        for row, squares in zip(range(r, r+l), shape):
+            for column, square in zip(range(c, c+w), squares):
                 if square:
                     self.board[row][column] = square
                     square_idx = next(square_idxs)
@@ -120,23 +101,56 @@ class Tetris:
                              row*self.square_width,
                              (column+1)*self.square_width,
                              (row+1)*self.square_width)
-                    self.active_piece['coords'][square_idx] = coord
-                    self.canvas.coords(self.active_piece['piece'][square_idx],
+                    self.active_piece.coords[square_idx] = coord
+                    self.canvas.coords(self.active_piece.piece[square_idx],
                                             coord)
+        self.active_piece.row = r
+        self.active_piece.column = c
+        self.active_piece.shape = shape
+        self.print_board()
+        return True
         
-        self.active_piece['shape'] = shape
-        self.active_piece['rotation_index'] = (
-                                               (self.active_piece[
-                                                'rotation_index']
-                                                +
-                                                1)
-                                               %
-                                               len(self.active_piece['rotation'])
-                                               )
+    def rotate(self, event=None):
+        if not self.piece_is_active:
+            return
+        if len(self.active_piece.shape) == len(self.active_piece.shape[0]):
+            return
+        r = self.active_piece.row
+        c = self.active_piece.column
+        l = len(self.active_piece.shape)
+        w = len(self.active_piece.shape[0])
+        x = c + w//2 # center column for old shape
+        y = r + l//2 # center row for old shape
+        direction = event.keysym
+        if direction in {'q', 'Q'}:
+            shape = ra(self.active_piece.shape, -90)
+            # 4 is a magic number, number of sides of a rectangle
+            rotation_index = (self.active_piece.rotation_index - 1) % 4
+            rx,ry = self.active_piece.rotation[rotation_index]
+            rotation_offsets = -rx,-ry
+        elif direction in {'e', 'E', '0', 'Up', 'w', 'W'}:
+            shape = ra(self.active_piece.shape, 90)
+            rotation_index = self.active_piece.rotation_index
+            rotation_offsets = self.active_piece.rotation[rotation_index]
+            rotation_index = (rotation_index + 1) % 4
+
+        l = len(shape) # length of new shape
+        w = len(shape[0]) # width of new shape
+        rt = y - l//2 # row of new shape
+        ct = x - w//2 # column of new shape
+        x_correction,y_correction = rotation_offsets
+        rt += y_correction
+        ct += x_correction
         
-        #for row in shape:
-        #    print(*(cell or ' ' for cell in row))
-    
+        # rotation prefers upper left corner -
+        # possibly hard-code a specific "center" square
+        # for each piece/shape
+        success = self.check_and_move(shape, rt, ct, l, w)
+        if not success:
+            return
+            
+        self.active_piece.rotation_index = rotation_index
+        
     def tick(self):
         if not self.piece_is_active:
             self.spawn()
@@ -149,71 +163,27 @@ class Tetris:
         right = {'Right', 'd', 'D'}
         if not self.piece_is_active:
             return
-        r = self.active_piece['row']
-        c = self.active_piece['column']
-        l = len(self.active_piece['shape'])
-        w = len(self.active_piece['shape'][0])
+        r = self.active_piece.row
+        c = self.active_piece.column
+        l = len(self.active_piece.shape)
+        w = len(self.active_piece.shape[0])
         direction = (event and event.keysym) or 'Down'
         # use event.keysym to check event/direction
         if direction in down:
-            if r+l >= self.board_height:
-                self.settle()
-                return
             rt = r+1 # row, temporary
             ct = c # column, temporary
         elif direction in left:
-            if not c:
-                return
             rt = r
             ct = c-1
         elif direction in right:
-            if c+w >= self.board_width:
-                return
             rt = r
             ct = c+1
-        # checks for collision with existing pieces
-        for row, squares in zip(range(rt, rt+l),
-                                self.active_piece['shape']
-                                ):
-            for column, square in zip(range(ct, ct+w), squares):
-                if square and self.board[row][column] == 'x':
-                    print(row, column, square, self.board[row][column])
-                    if direction in down:
-                        self.settle()
-                    return
-        # remove shape from board
-        for row in self.board:
-            row[:] = ['' if cell=='*' else cell for cell in row]
-        if direction in down:
-            self.active_piece['row'] += 1 # increment piece's row
-            r += 1 # increment piece's row
-        elif direction in left:
-            self.active_piece['column'] -= 1 # decrement piece's column
-            c -= 1 # decrement piece's column
-        elif direction in right:
-            self.active_piece['column'] += 1 # increment piece's column
-            c += 1 # increment piece's column
-        # put shape onto board
-        for row, squares in zip(range(r, r+l),
-                                self.active_piece['shape']
-                                ):
-            for column, square in zip(range(c, c+w), squares):
-                if square:
-                    self.board[row][column] = square
-        # move piece on canvas
-        for id,coords_idx in zip(self.active_piece['piece'], range(len(self.active_piece['coords']))):
-            x1,y1,x2,y2 = self.active_piece['coords'][coords_idx]
-            if direction in down:
-                y1 += self.square_width
-                y2 += self.square_width
-            elif direction in left:
-                x1 -= self.square_width
-                x2 -= self.square_width
-            elif direction in right:
-                x1 += self.square_width
-                x2 += self.square_width
-            self.active_piece['coords'][coords_idx] = x1,y1,x2,y2
-            self.canvas.coords(id, self.active_piece['coords'][coords_idx])
+        
+        success = self.check_and_move(self.active_piece.shape, rt, ct, l, w)
+        
+        if direction in down and not success:
+            self.settle()
+            return
     
     def settle(self):
         pass # this will check for loss by checking the height of the board content
@@ -222,7 +192,6 @@ class Tetris:
         print('clonk')
         for row in self.board:
             row[:] = ['x' if cell=='*' else cell for cell in row]
-            print(*(cell or ' ' for cell in row))
         self.parent.after(self.tickrate, self.spawn())
         
     def spawn(self):
@@ -231,31 +200,33 @@ class Tetris:
         shape = ra(shape, random.choice((0, 90, 180, 270)))
         width = len(shape[0])
         start = (10-width)//2
-        self.active_piece = {'shape':shape, 'piece':[], 'row':0, 'column':start, 'coords':[]}
+        self.active_piece = Shape(shape, [], 0, start, [])
         for y,row in enumerate(shape):
             self.board[y][start:start+width] = shape[y]
             for x,cell in enumerate(row, start=start):
                 if cell:
-                    self.active_piece['coords'].append((self.square_width*x,
+                    self.active_piece.coords.append((self.square_width*x,
                                                  self.square_width*y,
                                                  self.square_width*(x+1),
                                                  self.square_width*(y+1)))
-                    self.active_piece['piece'].append(
-                    self.canvas.create_rectangle(self.active_piece['coords'][-1]))
+                    self.active_piece.piece.append(
+                    self.canvas.create_rectangle(self.active_piece.coords[-1]))
         
-        self.active_piece['rotation_index'] = 0
-        if len(shape) == len(shape[0]): # square
-            self.active_piece['rotation'] = [(0,0)]
-        else: # tall or wide shape
-            self.active_piece['rotation'] = [(0,0),
-                                             (1,0),
-                                             (-1,1),
-                                             (0,-1)]
+        self.active_piece.rotation_index = 0
+        if 3 in (len(shape), len(shape[0])):
+            self.active_piece.rotation = [(0,0),
+                                          (1,0),
+                                          (-1,1),
+                                          (0,-1)]
+        else:
+            self.active_piece.rotation = [(1,-1),
+                                          (0,1),
+                                          (0,0),
+                                          (-1,0)]
         if len(shape) < len(shape[0]): # wide shape
-            self.active_piece['rotation_index'] += 1
+            self.active_piece.rotation_index += 1
         
-        for row in self.board:
-            print(*(cell or ' ' for cell in row))
+        self.print_board()
     
     def new(self):
         pass
