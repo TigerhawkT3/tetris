@@ -19,6 +19,8 @@ class Tetris:
         self.board_height = 24
         self.board = [['' for column in range(self.board_width)]
                         for row in range(self.board_height)]
+        self.field = [[None for column in range(self.board_width)]
+                        for row in range(self.board_height)]
         self.width = 300
         self.height = 720
         self.square_width = self.width//10
@@ -53,6 +55,13 @@ class Tetris:
                        'T':[['*', '*', '*'],
                             ['', '*', '']]
                       }
+        self.colors = {'s':'green',
+                       'z':'yellow',
+                       'r':'turquoise',
+                       'L':'orange',
+                       'o':'blue',
+                       'I':'red',
+                       'T':'violet'}
         self.parent.bind('<Down>', self.shift)
         self.parent.bind('<Left>', self.shift)
         self.parent.bind('<Right>', self.shift)
@@ -70,6 +79,7 @@ class Tetris:
         self.parent.bind('<Up>', self.rotate)
         self.parent.bind('w', self.rotate)
         self.parent.bind('W', self.rotate)
+        self.parent.bind('<space>', self.snap)
     
     def print_board(self):
         for row in self.board:
@@ -183,20 +193,25 @@ class Tetris:
         
         if direction in down and not success:
             self.settle()
-            return
     
     def settle(self):
-        pass # this will check for loss by checking the height of the board content
-        # size is 10x20, extra space giving 10x24
         self.piece_is_active = False
-        print('clonk')
         for row in self.board:
             row[:] = ['x' if cell=='*' else cell for cell in row]
+        for (x1,y1,x2,y2),id in zip(self.active_piece.coords, self.active_piece.piece):
+            self.field[y1//self.square_width][x1//self.square_width] = id
+        indices = [idx for idx,row in enumerate(self.board) if all(row)]
+        if indices:
+            self.clear(indices)
+        if any(any(row) for row in self.board[:4]):
+            self.lose()
+            return
         self.parent.after(self.tickrate, self.spawn())
         
     def spawn(self):
         self.piece_is_active = True
-        shape = self.shapes[random.choice('szrLoIT')]
+        key = random.choice('szrLoIT')
+        shape = self.shapes[key]
         shape = ra(shape, random.choice((0, 90, 180, 270)))
         width = len(shape[0])
         start = (10-width)//2
@@ -210,7 +225,9 @@ class Tetris:
                                                  self.square_width*(x+1),
                                                  self.square_width*(y+1)))
                     self.active_piece.piece.append(
-                    self.canvas.create_rectangle(self.active_piece.coords[-1]))
+                    self.canvas.create_rectangle(self.active_piece.coords[-1],
+                                                 fill=self.colors[key],
+                                                 width=3))
         
         self.active_piece.rotation_index = 0
         if 3 in (len(shape), len(shape[0])):
@@ -233,9 +250,40 @@ class Tetris:
     
     def lose(self):
         pass
-        
-    def clear(self):
-        pass
+    
+    def snap(self, event=None):
+        for i in range(24):
+            self.shift()
+        # doesn't work too great - change to full method,
+        # stripped-down version of self.shift?
+    
+    def clear(self, indices):
+        for idx in indices:
+            self.board.pop(idx)
+            self.board.insert(0, ['' for column in range(self.board_width)])
+        self.clear_iter(indices)
+    
+    def clear_iter(self, indices, current_column=0):
+        for row in indices:
+            if row%2:
+                cc = current_column
+            else:
+                cc = self.board_width - current_column - 1
+            id = self.field[row][cc]
+            self.field[row][cc] = None
+            self.canvas.delete(id)
+        if current_column < self.board_width-1:
+            self.parent.after(50, self.clear_iter, indices, current_column+1)
+        else:
+            for idx,row in enumerate(self.field):
+                offset = sum(r > idx for r in indices)*self.square_width
+                for square in row:
+                    if square:
+                        self.canvas.move(square, 0, offset)
+            for row in indices:
+                self.field.pop(row)
+                self.field.insert(0, [None for x in range(self.board_width)])
+                
     
 root = tk.Tk()
 tetris = Tetris(root)
