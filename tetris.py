@@ -1,6 +1,11 @@
 import tkinter as tk
 import random
-import pygame as pg
+try:
+    import pygame as pg
+except ImportError:
+    audio = None
+else:
+    audio = True
 import sys
 from matrix_rotation import rotate_array as ra
 
@@ -18,6 +23,22 @@ class Tetris:
         self.debug = 'debug' in sys.argv[1:]
         parent.title('T3tris')
         self.parent = parent
+        if audio: # if the import succeeded
+            pg.mixer.init(buffer=512)
+            try:
+                self.sounds = {name:pg.mixer.Sound(name)
+                                for name in ('music.ogg',
+                                             'settle.ogg',
+                                             'clear.ogg',
+                                             'lose.ogg')}
+            except pg.error as e:
+                self.audio = None
+                print(e)
+            else:
+                self.audio = {'m':True, 'f':True}
+                for char in 'mMfF':
+                    self.parent.bind(char, self.toggle_audio)
+                self.sounds['music.ogg'].play(loops=-1)
         self.board_width = 10
         self.board_height = 24
         self.high_score = 0
@@ -55,31 +76,12 @@ class Tetris:
                        'o':'blue',
                        'I':'red',
                        'T':'violet'}
-        self.parent.bind('<Down>', self.shift)
-        self.parent.bind('<Left>', self.shift)
-        self.parent.bind('<Right>', self.shift)
-        self.parent.bind('a', self.shift)
-        self.parent.bind('A', self.shift)
-        self.parent.bind('s', self.shift)
-        self.parent.bind('S', self.shift)
-        self.parent.bind('d', self.shift)
-        self.parent.bind('D', self.shift)
-        self.parent.bind('q', self.rotate)
-        self.parent.bind('Q', self.rotate)
-        self.parent.bind('e', self.rotate)
-        self.parent.bind('E', self.rotate)
-        self.parent.bind('0', self.rotate)
-        self.parent.bind('<Up>', self.rotate)
-        self.parent.bind('w', self.rotate)
-        self.parent.bind('W', self.rotate)
-        self.parent.bind('<space>', self.snap)
-        self.parent.bind('<End>', self.snap)
-        self.parent.bind('<Control_R>', self.snap)
-        self.parent.bind('z', self.snap)
-        self.parent.bind('Z', self.snap)
-        self.parent.bind('0', self.snap)
-        self.parent.bind('c', self.snap)
-        self.parent.bind('C', self.snap)
+        for key in ('<Down>', '<Left>', '<Right>', 'a', 'A', 's', 'S', 'd', 'D'):
+            self.parent.bind(key, self.shift)
+        for key in ('q', 'Q', 'e', 'E', '<Up>', 'w', 'W'):
+            self.parent.bind(key, self.rotate)
+        for key in ('<space>', '<End>', '<Control_R>', 'z', 'Z', '0', 'c', 'C'):
+            self.parent.bind(key, self.snap)
         self.parent.bind('<Escape>', self.pause)
         self.parent.bind('<Control-n>', self.draw_board)
         self.parent.bind('<Control-N>', self.draw_board)
@@ -147,6 +149,17 @@ class Tetris:
         self.spawning = self.parent.after(self.tickrate, self.spawn)
         self.ticking = self.parent.after(self.tickrate*2, self.tick)
     
+    def toggle_audio(self, event=None):
+        if not event:
+            return
+        key = event.keysym.lower()
+        self.audio[key] = not self.audio[key]
+        if key == 'm':
+            if not self.audio['m']:
+                self.sounds['music.ogg'].stop()
+            else:
+                self.sounds['music.ogg'].play(loops=-1)
+        
     def pause(self, event=None):
         if self.piece_is_active and not self.paused:
             self.paused = True
@@ -297,6 +310,8 @@ class Tetris:
         if any(any(row) for row in self.board[:4]):
             self.lose()
             return
+        if self.audio['f'] and not indices:
+            self.sounds['settle.ogg'].play()
         self.spawning = self.parent.after(self.tickrate, self.spawn)
     
     def preview(self):
@@ -362,6 +377,8 @@ class Tetris:
     
     def lose(self):
         self.piece_is_active = False
+        if self.audio['f']:
+            self.sounds['lose.ogg'].play()
         self.parent.after_cancel(self.ticking)
         self.parent.after_cancel(self.spawning)
         self.clear_iter(range(len(self.board)))
@@ -396,6 +413,8 @@ class Tetris:
             self.settle()
     
     def clear(self, indices):
+        if self.audio['f']:
+            self.sounds['clear.ogg'].play()
         for idx in indices:
             self.board.pop(idx)
             self.board.insert(0, ['' for column in range(self.board_width)])
