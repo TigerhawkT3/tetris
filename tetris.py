@@ -38,7 +38,6 @@ class Tetris:
                 self.audio = {'m':True, 'f':True}
                 for char in 'mMfF':
                     self.parent.bind(char, self.toggle_audio)
-                self.sounds['music.ogg'].play(loops=-1)
         self.board_width = 10
         self.board_height = 24
         self.high_score = 0
@@ -148,6 +147,8 @@ class Tetris:
         self.preview()
         self.spawning = self.parent.after(self.tickrate, self.spawn)
         self.ticking = self.parent.after(self.tickrate*2, self.tick)
+        if self.audio and self.audio['m']:
+            self.sounds['music.ogg'].play(loops=-1)
     
     def toggle_audio(self, event=None):
         if not event:
@@ -310,7 +311,7 @@ class Tetris:
         if any(any(row) for row in self.board[:4]):
             self.lose()
             return
-        if self.audio['f'] and not indices:
+        if self.audio and self.audio['f'] and not indices:
             self.sounds['settle.ogg'].play()
         self.spawning = self.parent.after(self.tickrate, self.spawn)
     
@@ -377,8 +378,10 @@ class Tetris:
     
     def lose(self):
         self.piece_is_active = False
-        if self.audio['f']:
+        if self.audio and self.audio['f']:
             self.sounds['lose.ogg'].play()
+        if self.audio and self.audio['m']:
+            self.sounds['music.ogg'].stop()
         self.parent.after_cancel(self.ticking)
         self.parent.after_cancel(self.spawning)
         self.clear_iter(range(len(self.board)))
@@ -413,7 +416,7 @@ class Tetris:
             self.settle()
     
     def clear(self, indices):
-        if self.audio['f']:
+        if self.audio and self.audio['f']:
             self.sounds['clear.ogg'].play()
         for idx in indices:
             self.board.pop(idx)
