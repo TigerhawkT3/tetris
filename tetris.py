@@ -85,10 +85,13 @@ class Tetris:
         self.parent.bind('<Escape>', self.pause)
         self.parent.bind('<Control-n>', self.draw_board)
         self.parent.bind('<Control-N>', self.draw_board)
+        self.parent.bind('g', self.toggle_guides)
+        self.parent.bind('G', self.toggle_guides)
         self.canvas = None
         self.preview_canvas = None
         self.ticking = None
         self.spawning = None
+        self.guide_fill = ''
         self.score_var = tk.StringVar()
         self.high_score_var = tk.StringVar()
         self.high_score_var.set('High Score:\n0')
@@ -147,10 +150,21 @@ class Tetris:
         self.paused = False
         self.bag = []
         self.preview()
+        self.guides = [self.canvas.create_line(0, 0, 0, self.height),
+                       self.canvas.create_line(self.width,
+                                               0,
+                                               self.width,
+                                               self.height)
+                        ]
         self.spawning = self.parent.after(self.tickrate, self.spawn)
         self.ticking = self.parent.after(self.tickrate*2, self.tick)
         if self.audio and self.audio['m']:
             self.sounds['music.ogg'].play(loops=-1)
+    
+    def toggle_guides(self, event=None):
+        self.guide_fill = '' if self.guide_fill else 'black'
+        self.canvas.itemconfig(self.guides[0], fill=self.guide_fill)
+        self.canvas.itemconfig(self.guides[1], fill=self.guide_fill)
     
     def toggle_audio(self, event=None):
         if not event:
@@ -211,14 +225,14 @@ class Tetris:
         self.active_piece.row = r
         self.active_piece.column = c
         self.active_piece.shape = shape
+        self.move_guides(c, c+w)
         if self.debug:
             self.print_board()
         return True
         
     def check_and_move(self, shape, r, c, l, w):
-        if self.check(shape, r, c, l, w):
-            self.move(shape, r, c, l, w)
-            return True
+        return self.check(shape, r, c, l, w
+            ) and self.move(shape, r, c, l, w)
         
     def rotate(self, event=None):
         if not self.piece_is_active:
@@ -255,8 +269,7 @@ class Tetris:
         # rotation prefers upper left corner -
         # possibly hard-code a specific "center" square
         # for each piece/shape
-        success = self.check_and_move(shape, rt, ct, l, w)
-        if not success:
+        if not self.check_and_move(shape, rt, ct, l, w):
             return
             
         self.active_piece.rotation_index = rotation_index
@@ -358,6 +371,14 @@ class Tetris:
         if len(shape) < len(shape[0]): # wide shape
             self.preview_piece.rotation_index += 1
     
+    def move_guides(self, left, right):
+        left *= self.square_width
+        right *= self.square_width
+        self.canvas.coords(self.guides[0], left, 0,
+                                           left, self.height)
+        self.canvas.coords(self.guides[1], right, 0,
+                                           right, self.height)
+    
     def spawn(self):
         self.piece_is_active = True
         self.active_piece = self.preview_piece
@@ -380,6 +401,8 @@ class Tetris:
                     self.canvas.create_rectangle(self.active_piece.coords[-1],
                                                  fill=self.colors[self.active_piece.key],
                                                  width=3))
+        self.move_guides(start, start+width)
+
         if self.debug:
             self.print_board()
     
