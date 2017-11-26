@@ -19,12 +19,13 @@ class Shape:
         self.coords = coords
         
 class Tetris:
-    def __init__(self, parent):
+    def __init__(self, parent, audio):
         self.debug = 'debug' in sys.argv[1:]
         self.random = 'random' in sys.argv[1:]
         parent.title('T3tris')
         self.parent = parent
-        if audio: # if the import succeeded
+        self.audio = audio
+        if self.audio: # if the import succeeded
             pg.mixer.init(buffer=512)
             try:
                 self.sounds = {name:pg.mixer.Sound(name)
@@ -332,7 +333,7 @@ class Tetris:
             return
         if self.audio and self.audio['f'] and not indices:
             self.sounds['settle.ogg'].play()
-        self.spawning = self.parent.after(self.tickrate, self.spawn)
+        self.spawning = self.parent.after(500 if indices and self.tickrate<500 else self.tickrate, self.spawn)
     
     def preview(self):
         self.preview_canvas.delete(tk.ALL)
@@ -480,5 +481,5 @@ class Tetris:
                 
     
 root = tk.Tk()
-tetris = Tetris(root)
+tetris = Tetris(root, audio)
 root.mainloop()
