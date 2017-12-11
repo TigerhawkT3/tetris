@@ -1,5 +1,6 @@
 import tkinter as tk
 import random
+import time
 try:
     import pygame as pg
 except ImportError:
@@ -14,14 +15,39 @@ class Shape:
         self.shape = shape
         self.key = key
         self.piece = piece
-        self.row = row
+        self._row = row
+        self._rotation_index = 0
         self.column = column
         self.coords = coords
+        self.hover_time = self.spin_time = time.perf_counter()
+    @property
+    def row(self):
+        return self._row
+    @row.setter
+    def row(self, x):
+        if x != self._row:
+            self._row = x
+            self.hover_time = time.perf_counter()
+    @property
+    def rotation_index(self):
+        return self._rotation_index
+    @rotation_index.setter
+    def rotation_index(self, x):
+        self._rotation_index = x
+        self.spin_time = time.perf_counter()
+    @property
+    def hover(self):
+        return time.perf_counter() - self.hover_time < 0.5
+    @property
+    def spin(self):
+        return time.perf_counter() - self.spin_time < 0.5
         
 class Tetris:
     def __init__(self, parent, audio):
         self.debug = 'debug' in sys.argv[1:]
         self.random = 'random' in sys.argv[1:]
+        self.hover = 'nohover' not in sys.argv[1:]
+        self.spin = 'spin' in sys.argv[1:]
         parent.title('T3tris')
         self.parent = parent
         self.audio = audio
@@ -241,6 +267,7 @@ class Tetris:
         if not self.piece_is_active:
             return
         if len(self.active_piece.shape) == len(self.active_piece.shape[0]):
+            self.active_piece.rotation_index = self.active_piece.rotation_index
             return
         r = self.active_piece.row
         c = self.active_piece.column
@@ -278,7 +305,7 @@ class Tetris:
         self.active_piece.rotation_index = rotation_index
         
     def tick(self):
-        if self.piece_is_active:
+        if self.piece_is_active and not (self.spin and self.active_piece.spin):
             self.shift()
         self.ticking = self.parent.after(self.tickrate, self.tick)
     
@@ -306,7 +333,7 @@ class Tetris:
         
         success = self.check_and_move(self.active_piece.shape, rt, ct, l, w)
         
-        if direction in down and not success:
+        if direction in down and not success and not (self.hover and self.active_piece.hover):
             self.settle()
     
     def settle(self):
