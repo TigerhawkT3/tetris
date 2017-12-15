@@ -48,6 +48,7 @@ class Tetris:
         self.random = 'random' in sys.argv[1:]
         self.hover = 'nohover' not in sys.argv[1:]
         self.spin = 'spin' in sys.argv[1:]
+        self.kick = 'kick' in sys.argv[1:]
         parent.title('T3tris')
         self.parent = parent
         self.audio = audio
@@ -296,14 +297,17 @@ class Tetris:
         rt += y_correction
         ct += x_correction
         
-        # rotation prefers upper left corner -
-        # possibly hard-code a specific "center" square
-        # for each piece/shape
-        if not self.check_and_move(shape, rt, ct, l, w):
+        if self.check_and_move(shape, rt, ct, l, w):
+            self.active_piece.rotation_index = rotation_index
             return
-            
-        self.active_piece.rotation_index = rotation_index
         
+        if self.kick:
+            for a,b in zip((0, 0,-1, 0,0,-2,-1,-1),
+                           (-1,1, 0,-2,2, 0,-1, 1)):
+                if self.check_and_move(shape, rt+a, ct+b, l, w):
+                    self.active_piece.rotation_index = rotation_index
+                    return
+                    
     def tick(self):
         if self.piece_is_active and not (self.spin and self.active_piece.spin):
             self.shift()
